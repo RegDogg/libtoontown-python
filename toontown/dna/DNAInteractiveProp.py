@@ -1,23 +1,43 @@
-from .DNAAnimProp import DNAAnimProp
-from .DNAParser import *
-from panda3d.core import *
+from panda3d.core import ModelNode
+from toontown.dna import DNAAnimProp
 
-class DNAInteractiveProp(DNAAnimProp):
-    TAG = 'interactive_prop'
+class DNAInteractiveProp(DNAAnimProp.DNAAnimProp):
+    __slots__ = (
+        'cellId')
+    
+    COMPONENT_CODE = 15
 
-    def __init__(self, name, code, anim, cell_id='0'):
-        DNAAnimProp.__init__(self, name, code, anim)
+    def __init__(self, name):
+        DNAAnimProp.DNAAnimProp.__init__(self, name)
+        self.cellId = -1
 
-        self.cell_id = int(cell_id)
+    def __del__(self):
+        DNAAnimProp.DNAAnimProp.__del__(self)
+        del self.cellId
 
-    def _makeNode(self, parent, storage):
-        node = DNAAnimProp._makeNode(self, parent, storage)
-
-        node.setTag('DNACellIndex', str(self.cell_id))
-
-        return node
-
+    def makeFromDGI(self, dgi, store):
+        DNAAnimProp.DNAAnimProp.makeFromDGI(self, dgi, store)
+        self.cellId = dgi.getInt16()
+        
     def getCellId(self):
-        return self.cell_id
+        return self.cellId
+        
+    def setCellId(self, cellId):
+        self.cellId = int(cellId)
 
-registerElement(DNAInteractiveProp)
+    def traverse(self, nodePath, dnaStorage):
+        node = None
+        if self.code == 'DCS':
+            node = ModelNode(self.name)
+            node.setPreserveTransform(ModelNode.PTNet)
+            node = nodePath.attachNewNode(node)
+        else:
+            node = dnaStorage.findNode(self.code)
+            node = node.copyTo(nodePath)
+            node.setName(self.name)
+        
+        node.setTag('DNAAnim', self.animName)
+        node.setTag('DNACellIndex', str(self.cellId))
+        node.setPosHprScale(self.pos, self.hpr, self.scale)
+        node.setColorScale(self.color, 0)
+        self.traverseChildren(node, dnaStorage)

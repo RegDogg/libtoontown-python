@@ -1,21 +1,35 @@
-from .DNASceneElement import DNASceneElement
-from .DNAParser import *
-from panda3d.core import *
+from panda3d.core import LVector3f
 
-class DNABattleCell(DNASceneElement):
-    TAG = 'battle_cell'
-    PARENTS = ['visgroup']
+class DNABattleCell(object):
+    __slots__ = (
+        'width', 'height', 'pos')
+    
+    COMPONENT_CODE = 21
 
-    def __init__(self, width, height, x, y, z):
-        DNASceneElement.__init__(self)
+    def __init__(self, width, height, pos):
+        self.width = width
+        self.height = height
+        self.pos = pos
 
-        self.width = float(width)
-        self.height = float(height)
-        self.pos = Point3(float(x), float(y), float(z))
+    def __del__(self):
+        del self.width
+        del self.height
+        del self.pos
+        
+    def setWidth(self, width):
+        self.width = int(width)
 
+    def getWidth(self):
+        return self.width
+        
+    def setHeight(self, height):
+        self.height = int(height)
+        
+    def getHeight(self):
+        return self.height
+        
+    def setPos(self, pos):
+        self.pos = LVector3f(int(pos))
+        
     def getPos(self):
         return self.pos
-
-    # TODO: Put stuff in the data pass.
-
-registerElement(DNABattleCell)

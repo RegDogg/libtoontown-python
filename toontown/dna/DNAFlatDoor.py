@@ -1,37 +1,17 @@
-from .DNANode import DNANode
-from .DNAParser import *
-from panda3d.core import *
+from panda3d.core import NodePath, DecalEffect
+from toontown.dna import DNADoor
 
-class DNAFlatDoor(DNANode):
-    TAG = 'flat_door'
-    PARENTS = ['wall']
+class DNAFlatDoor(DNADoor.DNADoor):
+    COMPONENT_CODE = 18
 
-    def __init__(self, code):
-        DNANode.__init__(self, code)
-
-        self.code = code
-
-    def _makeNode(self, storage, parent):
-        node = storage.findNode(self.code)
-        if node == None:
-            raise DNAError('DNAFlatDoor uses unknown code %s' % self.code)
-
-        return self.__apply(node, parent)
-
-    def generateSuitGeometry(self, storage, parent):
-        node = storage.findNode('suit_door')
-        if node:
-            return self.__apply(node, parent)
-
-    def __apply(self, node, parent):
-        np = node.copyTo(parent)
-        np.setScale(np.getTop(), (1, 1, 1)) # No net scale
-        np.setPos(0.5, 0, 0) # Centered within the wall
-
-        # Appear on top of wall:
-        #np.setDepthOffset(self.DEPTH_OFFSET)
-        np.setDepthOffset(1)
-
-        return np
-
-registerElement(DNAFlatDoor)
+    def traverse(self, nodePath, dnaStorage):
+        node = dnaStorage.findNode(self.code)
+        node = node.copyTo(nodePath)
+        node.setScale(NodePath(), (1, 1, 1))
+        node.setPosHpr((0.5, 0, 0), (0, 0, 0))
+        node.setColor(self.color)
+        
+        if base.config.GetBool('want-dna-depth-offsets', False):
+            node.setDepthOffset(0)
+        else:
+            node.getNode(0).setEffect(DecalEffect.make())

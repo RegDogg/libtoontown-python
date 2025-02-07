@@ -1,51 +1,53 @@
-import xml.sax
+from direct.stdpy import threading
+from toontown.dna import DNALoader
+from toontown.dna.DNAStorage import *
+from toontown.dna.DNASuitPoint import *
+from toontown.dna.DNAGroup import *
+from toontown.dna.DNAVisGroup import *
+from toontown.dna.DNADoor import *
+from toontown.dna.DNAAnimBuilding import *
+from toontown.dna.DNAAnimProp import *
+from toontown.dna.DNABattleCell import *
+from toontown.dna.DNACornice import *
+from toontown.dna.DNAFlatBuilding import *
+from toontown.dna.DNAFlatDoor import *
+from toontown.dna.DNAInteractiveProp import *
+from toontown.dna.DNALandmarkBuilding import *
+from toontown.dna.DNAWall import *
+from toontown.dna.DNAWindows import *
+from toontown.suit.SuitLegList import *
 
-class DNAError(Exception): pass
-class DNAParseError(DNAError): pass
+class DNABulkLoader:
+    __slots__ = (
+        'dnaStorage', 'dnaFiles')
 
-elementRegistry = {}
-def registerElement(element):
-    elementRegistry[element.TAG] = element
+    def __init__(self, storage, files):
+        self.dnaStorage = storage
+        self.dnaFiles = files
 
-class DNASaxHandler(xml.sax.ContentHandler):
-    def __init__(self):
-        xml.sax.ContentHandler.__init__(self)
+    def loadDNAFiles(self):
+        for file in self.dnaFiles:
+            print('Reading DNA file...', file)
+            loadDNABulk(self.dnaStorage, file)
+        
+        del self.dnaStorage
+        del self.dnaFiles
 
-        self.stack = []
-        self.root = None
+def loadDNABulk(dnaStorage, file):
+    dnaLoader = DNALoader.DNALoader()
+    dnaLoader.loadDNAFile(dnaStorage, file)
+    dnaLoader.destroy()
 
-    def startElement(self, tag, attrs):
-        if self.stack:
-            parent = self.stack[-1]
-            parentTag = parent.TAG
-        else:
-            parent = None
-            parentTag = None
+def loadDNAFile(dnaStorage, file):
+    print('Reading DNA file...', file)
+    dnaLoader = DNALoader.DNALoader()
+    node = dnaLoader.loadDNAFile(dnaStorage, file)
+    dnaLoader.destroy()
+    if node.node().getNumChildren() > 0:
+        return node.node()
 
-        element = elementRegistry.get(tag)
-        if not element:
-            raise DNAParseError('Unknown element type: ' + tag)
-
-        if parentTag not in element.PARENTS:
-            raise DNAParseError('Cannot put %s below %s element' % (tag, parentTag))
-
-        element = element(**attrs)
-        self.stack.append(element)
-        element.reparentTo(parent)
-
-        if not self.root:
-            self.root = element
-
-    def endElement(self, tag):
-        self.stack.pop(-1)
-
-    def characters(self, chars):
-        if not self.stack:
-            return
-
-        self.stack[-1].handleText(chars)
-
-def parse(stream):
-    handler = DNASaxHandler()
-    xml.sax.parse(stream, handler)
-    return handler.root
+def loadDNAFileAI(dnaStorage, file):
+    dnaLoader = DNALoader.DNALoader()
+    data = dnaLoader.loadDNAFileAI(dnaStorage, file)
+    dnaLoader.destroy()
+    return data

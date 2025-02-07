@@ -1,33 +1,12 @@
-from .DNAVisGroup import DNAVisGroup
-import re
+from panda3d.core import LVecBase4f
 
+def dgiExtractString8(dgi):
+    return dgi.getString()
 
-def getChildrenOfType(root, type):
-    list = []
-    r_getChildrenOfType(root, type, list)
-    return list
-
-def r_getChildrenOfType(root, type, list):
-    for child in root.children:
-        if isinstance(child, type):
-            list.append(child)
-        r_getChildrenOfType(child, type, list)
-
-def getVisGroups(root):
-    return getChildrenOfType(root, DNAVisGroup)
-
-
-INDEX_REGEX = re.compile('([a-z][a-z])([0-9]+):')
-def getBuildingClassFromName(name):
-    match = INDEX_REGEX.match(name)
-    if not match:
-        return None
-    else:
-        return match.group(1)
-
-def getBlockFromName(name):
-    match = INDEX_REGEX.match(name)
-    if not match:
-        return None
-    else:
-        return int(match.group(2))
+def dgiExtractColor(dgi):
+    color = LVecBase4f()
+    color[0] = dgi.get_uint8() / 255
+    color[1] = dgi.get_uint8() / 255
+    color[2] = dgi.get_uint8() / 255
+    color[3] = dgi.get_uint8() / 255
+    return color

@@ -1,29 +1,62 @@
-from .DNANode import DNANode
-from .DNAParser import *
-from panda3d.core import *
+from panda3d.core import LVector4f, LPoint3f
+from toontown.dna import DNANode
+from toontown.dna import DNAFlatBuilding
+from toontown.dna import DNAError
+from toontown.dna import DNAUtil
 
-class DNAWall(DNANode):
-    TAG = 'wall'
-    PARENTS = ['flat_building']
+class DNAWall(DNANode.DNANode):
+    __slots__ = (
+        'code', 'height', 'color')
 
-    def __init__(self, code, height="0"):
-        DNANode.__init__(self, 'wall')
+    COMPONENT_CODE = 10
 
-        self.code = code
-        self.height = float(height)
+    def __init__(self, name):
+        DNANode.DNANode.__init__(self, name)
+        self.code = ''
+        self.height = 0
+        self.color = LVector4f(1, 1, 1, 1)
 
-    def _makeNode(self, storage, parent):
-        node = storage.findNode(self.code)
-        if node == None:
-            raise DNAError('DNAWall uses unknown code %s' % self.code)
+    def __del__(self):
+        DNANode.DNANode.__del__(self)
+        del self.code
+        del self.height
+        del self.color
+        
+    def getCode(self):
+        return self.code
+        
+    def setCode(self, code):
+        self.code = str(code)
+        
+    def getHeight(self):
+        return self.height
+        
+    def setHeight(self, height):
+        self.height = int(height)
+        
+    def getColor(self):
+        return self.color
+        
+    def setColor(self, color):
+        self.color = LVector4f(int(color))
 
-        buildingHeight = parent.getPythonTag('wall_height') or 0.0
+    def makeFromDGI(self, dgi, store):
+        DNANode.DNANode.makeFromDGI(self, dgi, store)
+        self.code = DNAUtil.dgiExtractString8(dgi)
+        self.height = dgi.getInt16() / 100.0
+        self.color = DNAUtil.dgiExtractColor(dgi)
 
-        wall = node.copyTo(parent)
-        wall.setScale(self.parent_.width, 1, self.height)
-        wall.setZ(buildingHeight)
-        parent.setPythonTag('wall_height', buildingHeight + self.height)
-
-        return wall
-
-registerElement(DNAWall)
+    def traverse(self, nodePath, dnaStorage):
+        node = dnaStorage.findNode(self.code)
+        if node is None:
+            raise DNAError.DNAError('DNAWall code ' + self.code + ' not found in DNAStorage')
+        
+        node = node.copyTo(nodePath)
+        pos = LPoint3f(self.pos)
+        pos.setZ(DNAFlatBuilding.DNAFlatBuilding.currentWallHeight)
+        scale = LPoint3f(self.scale)
+        scale.setZ(self.height)
+        node.setPosHprScale(pos, self.hpr, scale)
+        node.setColor(self.color)
+        self.traverseChildren(node, dnaStorage)
+        DNAFlatBuilding.DNAFlatBuilding.currentWallHeight += self.height

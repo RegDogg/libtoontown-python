@@ -1,73 +1,127 @@
-from .DNANode import DNANode
-from .DNAFlatDoor import DNAFlatDoor
-from .DNAParser import *
-from . import DNAUtil
-from panda3d.core import *
-import re
+from panda3d.core import DecalEffect, LPoint3f
+from toontown.dna import DNANode
+from toontown.dna import DNAWall
+import random
 
-class DNAFlatBuilding(DNANode):
-    TAG = 'flat_building'
+class DNAFlatBuilding(DNANode.DNANode):
+    __slots__ = (
+        'width', 'hasDoor')
+    
+    COMPONENT_CODE = 9
+    currentWallHeight = 0
 
-    def __init__(self, id, width="0"):
-        DNANode.__init__(self, id)
+    def __init__(self, name):
+        DNANode.DNANode.__init__(self, name)
+        self.width = 0
+        self.hasDoor = False
 
-        self.id = id
-        self.width = float(width)
+    def __del__(self):
+        DNANode.DNANode.__del__(self)
+        del self.width
+        del self.hasDoor
 
-    def _makeNode(self, storage, parent):
-        return parent.attachNewNode(self.id)
+    def getWidth(self):
+        return self.width
+        
+    def setWidth(self, width):
+        self.width = int(width)
 
-    def _postGenerate(self, storage, np):
-        height = np.getPythonTag('wall_height') or 0.0
-        np.clearPythonTag('wall_height')
+    def makeFromDGI(self, dgi, store):
+        DNANode.DNANode.makeFromDGI(self, dgi, store)
+        self.width = dgi.getUint16() / 10.0
+        self.hasDoor = dgi.getBool()
 
-        # First, set up collisions. We need a (self.width, height)-sized square.
-        barrierNode = storage.findNode('wall_camera_barrier')
-        if not barrierNode:
-            raise DNAError('No wall_camera_barrier in storage.')
+    def setupFlat(self, np, store, chr, wallCode):
+        if self.name[:2] != 'tb':
+            return
 
-        barrier = barrierNode.copyTo(np)
-        barrier.setScale(self.width, 1, height)
+        ss = chr + 'b' + self.name[2:]
 
-        type = DNAUtil.getBuildingClassFromName(self.id)
-        if type == 'tb':
-            self.generateSuitGeometry(storage, np, height, barrier)
+        node = np.attachNewNode(ss)
 
-        # We need to set collisions on all of our knock knock doors:
-        block = DNAUtil.getBlockFromName(self.name)
-        if block != None:
-            for collisionNP in np.findAllMatches('**/door_*/+CollisionNode'):
-                collisionNP.setName('KnockKnockDoorSphere_%d' % block)
+        scale = LPoint3f(self.scale)
+        scale.setX(self.width)
+        scale.setZ(DNAFlatBuilding.currentWallHeight)
 
-        # Finally, flatten down:
-        np.flattenStrong()
+        node.setZ(DNAFlatBuilding.currentWallHeight)
+        node.setPosHprScale(self.pos, self.hpr, scale)
 
-    def generateSuitGeometry(self, storage, np, height, barrier):
-        node = np.getParent().attachNewNode('sb' + self.id[2:])
-        node.setTransform(np.getTransform())
+        numCodes = store.getNumCatalogCodes(wallCode)
+        if not numCodes:
+            return
 
-        barrier.copyTo(node)
+        wallNode = store.findNode(store.getCatalogCode(wallCode, random.randint(0, numCodes - 1)))
+        if wallNode.isEmpty():
+            return
 
-        block = DNAUtil.getBlockFromName(self.id)
-        x = int(np.getX())
-        y = int(np.getY())
-        seed = block*1231 + x*83 + y
+        wallNode.copyTo(node)
+        if self.hasDoor:
+            wallNp = node.find("wall_*")
+            doorNp = store.findNode("suit_door").copyTo(wallNp)
+            doorNp.setPosHprScale(0.5, 0, 0, 0, 0, 0, 1.0 / self.width, 0, 1.0 / DNAFlatBuilding.currentWallHeight)
+            wallNp.setEffect(DecalEffect.make())
 
-        codes = storage.getNumCatalogCodes('suit_wall')
-        if codes != 0:
-            wallCode = storage.getCatalogCode('suit_wall', seed%codes)
-            wall = storage.findNode(wallCode)
-        else:
-            wall = None
-
-        if wall:
-            wallNode = wall.copyTo(node)
-            wallNode.setScale(self.width, 1, height)
-
-            for door in DNAUtil.getChildrenOfType(self, DNAFlatDoor):
-                door.generateSuitGeometry(storage, wallNode)
-
-        node.flattenStrong()
+        node.flattenMedium()
         node.stash()
 
-registerElement(DNAFlatBuilding)
+    def setupSuitFlatBuilding(self, np, store):
+        self.setupFlat(np, store, 's', 'suit_wall')
+
+    def setupCogdoFlatBuilding(self, np, store):
+        self.setupFlat(np, store, 'c', 'cogdo_wall')
+
+    def traverse(self, np, store):
+        DNAFlatBuilding.currentWallHeight = 0
+        node = np.attachNewNode(self.name)
+        internalNode = node.attachNewNode(self.getName() + '-internal')
+        scale = LPoint3f(self.scale)
+        scale.setX(self.width)
+        internalNode.setScale(scale)
+        node.setPosHpr(self.pos, self.hpr)
+
+        for child in self.children:
+            if isinstance(child, DNAWall.DNAWall):
+                child.traverse(internalNode, store)
+            else:
+                child.traverse(node, store)
+
+        if DNAFlatBuilding.currentWallHeight != 0:
+            result = store.findNode("wall_camera_barrier")
+            if result.isEmpty():
+                raise DNAError.DNAError('DNAFlatBuilding requires that there is a wall_camera_barrier in storage')
+
+            cameraBarrier = result.copyTo(internalNode)
+            cameraBarrier.setScale(1, 1, DNAFlatBuilding.currentWallHeight)
+            self.setupSuitFlatBuilding(np, store)
+            self.setupCogdoFlatBuilding(np, store)
+            internalNode.flattenStrong()
+
+            collNp = node.find("**/door_*/+CollisionNode")
+            if not collNp.isEmpty():
+                collNp.setName("KnockKnockDoorSphere_" + store.getBlock(self.name))
+
+            cameraBarrier.wrtReparentTo(np)
+            wallCollection = internalNode.findAllMatches("wall*")
+            doorCollection = internalNode.findAllMatches("**/door*")
+            corniceCollection = internalNode.findAllMatches("**/cornice*_d")
+            windowCollection = internalNode.findAllMatches("**/window*")
+            wallHolder = node.attachNewNode("wall_holder")
+            wallDecal = node.attachNewNode("wall_decal")
+            wallCollection.reparentTo(wallHolder)
+            doorCollection.reparentTo(wallDecal)
+            corniceCollection.reparentTo(wallDecal)
+            windowCollection.reparentTo(wallDecal)
+
+            for i in range(wallHolder.getNumChildren()):
+                child = wallHolder.getChild(i)
+                child.clearTag("DNARoot")
+                child.clearTag("DNACode")
+
+            wallHolder.flattenStrong()
+            wallDecal.flattenStrong()
+            holderChild0 = wallHolder.getChild(0)
+            wallDecal.getChildren().reparentTo(holderChild0)
+            holderChild0.reparentTo(internalNode)
+            holderChild0.setEffect(DecalEffect.make())
+            wallHolder.removeNode()
+            wallDecal.removeNode()

@@ -1,24 +1,30 @@
-from .DNANode import DNANode
-from .DNAParser import *
-from panda3d.core import *
+from panda3d.core import ModelNode
+from toontown.dna import DNAProp
 
-class DNASign(DNANode):
-    TAG = 'sign'
+class DNASign(DNAProp.DNAProp):
+    COMPONENT_CODE = 5
 
-    def __init__(self, code=None):
-        DNANode.__init__(self, code or 'sign')
+    def __init__(self, name):
+        DNAProp.DNAProp.__init__(self, name)
 
-        self.code = code
-
-    def _makeNode(self, storage, parent):
-        node = storage.findNode(self.code) or NodePath(self.name)
-
-        parentSignOrigin = parent.find('**/*sign_origin') or parent
-        sign = node.copyTo(parentSignOrigin)
-
-        #sign.setDepthOffset(self.DEPTH_OFFSET)
-        sign.setDepthOffset(50)
-
-        return sign
-
-registerElement(DNASign)
+    def traverse(self, nodePath, dnaStorage):
+        decalNode = nodePath.find("**/sign_decal")
+        if decalNode.isEmpty():
+            decalNode = nodePath.find("**/*_front")
+        
+        if decalNode.isEmpty() or decalNode.getNode(0).isGeomNode():
+            decalNode = nodePath.find("**/+GeomNode")
+        
+        if self.code:
+            np = dnaStorage.findNode(self.code).copyTo(decalNode)
+            np.setName("sign")
+        else:
+            np = decalNode.attachNewNode(ModelNode("sign"))
+        
+        np.setDepthOffset(50)
+        origin = nodePath.find("**/*sign_origin")
+        np.setPosHprScale(origin, self.pos, self.hpr, self.scale)
+        np.setColor(self.color)
+        np.wrtReparentTo(origin, 0)
+        self.traverseChildren(np, dnaStorage)
+        np.flattenStrong()
